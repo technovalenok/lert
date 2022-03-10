@@ -21,8 +21,9 @@ type App struct {
 	Sources []app.SourceInterface
 }
 
-func (a *App) AddSource(src app.SourceInterface) {
+func (a *App) AddSource(src app.SourceInterface) *App {
 	a.Sources = append(a.Sources, src)
+	return a
 }
 
 func (a *App) GetRatesHandler(res http.ResponseWriter, _ *http.Request) {
@@ -59,10 +60,16 @@ func main() {
 
 	// init currencylayer.com source
 	currencyLayerApiKey := os.Getenv("API_CURRENCYLAYER_KEY")
-	currencyLayerSource := source.NewCurrencyLayerClient("currencylayer", currencyLayerApiKey)
+	currencyLayerSource := source.NewCurrencyLayerSource("currencylayer", currencyLayerApiKey)
+
+	// init currencyapi.com source
+	currencyApiApiKey := os.Getenv("API_CURRENCYAPI_KEY")
+	currencyApiSource := source.NewCurrencyApiSource("currencyapi", currencyApiApiKey)
 
 	application := &App{}
-	application.AddSource(currencyLayerSource)
+	application.
+		AddSource(currencyLayerSource).
+		AddSource(currencyApiSource)
 
 	http.HandleFunc("/api/rate", application.GetRatesHandler)
 

@@ -7,22 +7,25 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/technovalenok/lert/app"
 )
 
+// CurrencyLayerSource is a source of https://currencylayer.com/
 type CurrencyLayerSource struct {
 	apiKey string
 	code   string
 }
 
-type CurrencyLayerApiResponse struct {
-	Success bool               `json:"success"`
-	Source  string             `json:"source"`
-	Quotes  map[string]float64 `json:"quotes"`
+type CurrencyLayerResponse struct {
+	Success   bool               `json:"success"`
+	Source    string             `json:"source"`
+	Quotes    map[string]float64 `json:"quotes"`
+	Timestamp int                `json:"timestamp"`
 }
 
-func NewCurrencyLayerClient(code, apiKey string) app.SourceInterface {
+func NewCurrencyLayerSource(code, apiKey string) app.SourceInterface {
 	return CurrencyLayerSource{code: code, apiKey: apiKey}
 }
 
@@ -56,7 +59,7 @@ func (s CurrencyLayerSource) Rates() ([]app.Rate, error) {
 
 	log.Printf("Source %s response: %s", s.code, string(body)) // TODO log + interceptor
 
-	var response CurrencyLayerApiResponse
+	var response CurrencyLayerResponse
 	err = json.Unmarshal(body, &response)
 	if err != nil {
 		return nil, &app.ErrSourceDataUnavailable{
@@ -72,16 +75,22 @@ func (s CurrencyLayerSource) Rates() ([]app.Rate, error) {
 		}
 	}
 
-	// TODO to database?
+	// TODO to database config?
+	loc, _ := time.LoadLocation("UTC")
+	updatedAt := time.Unix(int64(response.Timestamp), 0).In(loc)
 	rubRate := app.Rate{
-		From: app.CurrencyUSD,
-		To:   app.CurrencyRUB,
-		Rate: response.Quotes["USDRUB"],
+		Source:    s.code,
+		UpdatedAt: updatedAt.Format(time.RFC3339),
+		From:      app.CurrencyUSD,
+		To:        app.CurrencyRUB,
+		Rate:      response.Quotes["USDRUB"],
 	}
 	eurRate := app.Rate{
-		From: app.CurrencyUSD,
-		To:   app.CurrencyEUR,
-		Rate: response.Quotes["USDEUR"],
+		Source:    s.code,
+		UpdatedAt: updatedAt.Format(time.RFC3339),
+		From:      app.CurrencyUSD,
+		To:        app.CurrencyEUR,
+		Rate:      response.Quotes["USDEUR"],
 	}
 
 	return []app.Rate{rubRate, eurRate}, nil

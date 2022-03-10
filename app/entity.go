@@ -22,9 +22,11 @@ func (esu ErrSourceDataUnavailable) Error() string {
 type Currency string
 
 type Rate struct {
-	From Currency
-	To   Currency
-	Rate float64
+	Source    string
+	UpdatedAt string
+	From      Currency
+	To        Currency
+	Rate      float64
 }
 
 type SourceInterface interface {
