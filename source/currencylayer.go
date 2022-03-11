@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"time"
 
 	"github.com/technovalenok/lert/app"
+	"go.uber.org/zap"
 )
 
 // CurrencyLayerSource is a source of https://currencylayer.com/
@@ -57,7 +57,7 @@ func (s CurrencyLayerSource) Rates() ([]app.Rate, error) {
 		}
 	}
 
-	log.Printf("Source %s response: %s", s.code, string(body)) // TODO log + interceptor
+	zap.S().Infof("Source %s response: %s", s.code, string(body))
 
 	var response CurrencyLayerResponse
 	err = json.Unmarshal(body, &response)

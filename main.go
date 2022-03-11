@@ -3,12 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 
 	"github.com/joho/godotenv"
 	"github.com/technovalenok/lert/app"
+	"go.uber.org/zap"
 
 	"github.com/technovalenok/lert/source"
 )
@@ -33,7 +33,7 @@ func (a *App) GetRatesHandler(res http.ResponseWriter, _ *http.Request) {
 	var result []app.Rate
 	for _, src := range a.Sources {
 		if rates, err := src.Rates(); err != nil {
-			log.Printf("Source %s error: %v", src.Code(), err) // TODO log
+			zap.S().Errorf("Source %s error: %v", src.Code(), err)
 			continue
 		} else {
 			result = append(result, rates...)
@@ -43,7 +43,7 @@ func (a *App) GetRatesHandler(res http.ResponseWriter, _ *http.Request) {
 	response := &Response{result}
 	responseJson, err := json.Marshal(response)
 	if err != nil {
-		log.Printf("Unable to marshall response: %s", err)
+		zap.S().Errorf("Unable to marshall response: %s", err)
 		res.WriteHeader(http.StatusInternalServerError)
 		// TODO 5xx error response body
 	} else {
@@ -53,9 +53,14 @@ func (a *App) GetRatesHandler(res http.ResponseWriter, _ *http.Request) {
 }
 
 func main() {
+	logger, _ := zap.NewDevelopment()
+	zap.ReplaceGlobals(logger)
+	defer logger.Sync()
+
+	logger.Info("Init server")
 	err := godotenv.Load()
 	if err != nil {
-		log.Println("Error loading .env file") // TODO logging
+		logger.Info("Error loading .env file")
 	}
 
 	// init currencylayer.com source
@@ -73,5 +78,5 @@ func main() {
 
 	http.HandleFunc("/api/rate", application.GetRatesHandler)
 
-	log.Fatal(http.ListenAndServe(":9000", nil))
+	logger.Fatal("Server error", zap.Error(http.ListenAndServe(":9000", nil)))
 }
