@@ -8,6 +8,8 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/technovalenok/lert/app"
+	"github.com/technovalenok/lert/client"
+	"github.com/technovalenok/lert/handler"
 	"go.uber.org/zap"
 
 	"github.com/technovalenok/lert/source"
@@ -60,23 +62,27 @@ func main() {
 	logger.Info("Init server")
 	err := godotenv.Load()
 	if err != nil {
-		logger.Info("Error loading .env file")
+		logger.Fatal("Error loading .env file")
 	}
+
+	httpClient := client.NewHTTPClient()
 
 	// init currencylayer.com source
 	currencyLayerApiKey := os.Getenv("API_CURRENCYLAYER_KEY")
-	currencyLayerSource := source.NewCurrencyLayerSource("currencylayer", currencyLayerApiKey)
+	currencyLayerSource := source.NewCurrencyLayerSource("currencylayer", currencyLayerApiKey, *httpClient)
 
 	// init currencyapi.com source
 	currencyApiApiKey := os.Getenv("API_CURRENCYAPI_KEY")
-	currencyApiSource := source.NewCurrencyApiSource("currencyapi", currencyApiApiKey)
+	currencyApiSource := source.NewCurrencyApiSource("currencyapi", currencyApiApiKey, *httpClient)
 
 	application := &App{}
 	application.
 		AddSource(currencyLayerSource).
 		AddSource(currencyApiSource)
 
-	http.HandleFunc("/api/rate", application.GetRatesHandler)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/rate", application.GetRatesHandler)
+	wrappedMux := handler.NewHttpHandler(mux)
 
-	logger.Fatal("Server error", zap.Error(http.ListenAndServe(":9000", nil)))
+	logger.Fatal("Server error", zap.Error(http.ListenAndServe(":9000", wrappedMux)))
 }

@@ -9,13 +9,14 @@ import (
 	"time"
 
 	"github.com/technovalenok/lert/app"
-	"go.uber.org/zap"
 )
 
 // CurrencyLayerSource is a source of https://currencylayer.com/
 type CurrencyLayerSource struct {
 	apiKey string
 	code   string
+	url    string
+	client http.Client
 }
 
 type CurrencyLayerResponse struct {
@@ -25,22 +26,24 @@ type CurrencyLayerResponse struct {
 	Timestamp int                `json:"timestamp"`
 }
 
-func NewCurrencyLayerSource(code, apiKey string) app.SourceInterface {
-	return CurrencyLayerSource{code: code, apiKey: apiKey}
+func NewCurrencyLayerSource(code, apiKey string, client http.Client) app.SourceInterface {
+	return CurrencyLayerSource{
+		code:   code,
+		apiKey: apiKey,
+		url:    "http://apilayer.net/api/live",
+		client: client,
+	}
 }
 
 func (s CurrencyLayerSource) Code() string {
 	return s.code
 }
 
-func (s *CurrencyLayerSource) ApiKey() string {
-	return s.apiKey
-}
-
 func (s CurrencyLayerSource) Rates() ([]app.Rate, error) {
 	params := "access_key=" + url.QueryEscape(s.apiKey) + "&currencies=EUR,RUB&source=USD"
-	uri := fmt.Sprintf("http://apilayer.net/api/live?%s", params)
-	resp, err := http.Get(uri)
+	uri := fmt.Sprintf("%s?%s", s.url, params)
+	resp, err := s.client.Get(uri)
+
 	if err != nil {
 		return nil, &app.ErrSourceDataUnavailable{
 			Code:    s.code,
@@ -56,8 +59,6 @@ func (s CurrencyLayerSource) Rates() ([]app.Rate, error) {
 			Message: fmt.Sprintf("Unable to read source response body: %s", err),
 		}
 	}
-
-	zap.S().Infof("Source %s response: %s", s.code, string(body))
 
 	var response CurrencyLayerResponse
 	err = json.Unmarshal(body, &response)

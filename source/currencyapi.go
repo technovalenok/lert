@@ -9,13 +9,14 @@ import (
 	"time"
 
 	"github.com/technovalenok/lert/app"
-	"go.uber.org/zap"
 )
 
 // CurrencyApiSource is a source of https://currencyapi.com
 type CurrencyApiSource struct {
 	apiKey string
 	code   string
+	url    string
+	client http.Client
 }
 
 type CurrencyApiData struct {
@@ -32,22 +33,24 @@ type CurrencyApiResponse struct {
 	Data map[string]CurrencyApiData `json:"data"`
 }
 
-func NewCurrencyApiSource(code, apiKey string) app.SourceInterface {
-	return CurrencyApiSource{code: code, apiKey: apiKey}
+func NewCurrencyApiSource(code, apiKey string, client http.Client) app.SourceInterface {
+	return CurrencyApiSource{
+		code:   code,
+		apiKey: apiKey,
+		url:    "https://api.currencyapi.com/v3/latest",
+		client: client,
+	}
 }
 
 func (s CurrencyApiSource) Code() string {
 	return s.code
 }
 
-func (s *CurrencyApiSource) ApiKey() string {
-	return s.apiKey
-}
-
 func (s CurrencyApiSource) Rates() ([]app.Rate, error) {
 	params := "apikey=" + url.QueryEscape(s.apiKey) + "&currencies=EUR,RUB&base_currency=USD"
-	uri := fmt.Sprintf("https://api.currencyapi.com/v3/latest?%s", params)
-	resp, err := http.Get(uri)
+	uri := fmt.Sprintf("%s?%s", s.url, params)
+	resp, err := s.client.Get(uri)
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, &app.ErrSourceDataUnavailable{
 			Code:    s.code,
@@ -69,8 +72,6 @@ func (s CurrencyApiSource) Rates() ([]app.Rate, error) {
 			Message: fmt.Sprintf("Unable to read source response body: %s", err),
 		}
 	}
-
-	zap.S().Infof("Source %s response: %s", s.code, string(body))
 
 	var response CurrencyApiResponse
 	err = json.Unmarshal(body, &response)
