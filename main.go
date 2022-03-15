@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sync"
 
 	"github.com/joho/godotenv"
 	"github.com/technovalenok/lert/app"
@@ -28,21 +29,45 @@ func (a *App) AddSource(src app.SourceInterface) *App {
 	return a
 }
 
+func (a *App) GetAllRates(workers ...func()) {
+	var wg sync.WaitGroup
+	wg.Add(len(workers))
+	defer wg.Wait()
+
+	for _, f := range workers {
+		go func(w func()) {
+			defer wg.Done()
+			w()
+		}(f)
+	}
+}
+
 func (a *App) GetRatesHandler(res http.ResponseWriter, _ *http.Request) {
 	header := res.Header()
 	header.Set("Content-Type", "application/json")
 
-	var result []app.Rate
+	result := make(map[string][]app.Rate)
+	var w []func()
 	for _, src := range a.Sources {
-		if rates, err := src.Rates(); err != nil {
-			zap.S().Errorf("Source %s error: %v", src.Code(), err)
-			continue
-		} else {
-			result = append(result, rates...)
-		}
+		s := src
+		w = append(w, func() {
+			rates, err := s.Rates()
+			if err != nil {
+				zap.S().Errorf("Source %s error: %v", src.Code(), err)
+			} else {
+				result[s.Code()] = rates
+			}
+		})
 	}
 
-	response := &Response{result}
+	a.GetAllRates(w...)
+
+	var rs []app.Rate
+	for _, v := range result {
+		rs = append(rs, v...)
+	}
+
+	response := &Response{rs}
 	responseJson, err := json.Marshal(response)
 	if err != nil {
 		zap.S().Errorf("Unable to marshall response: %s", err)
